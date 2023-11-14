@@ -1,0 +1,79 @@
+$title Prueba aleatoria para el problema de rutas de vehículos capacitados
+
+Set
+*Donde depot es el punto de origen. 
+   i    'nodos'      /depot, i1*i9/
+   p   Conjunto_de_productos / p1*p25 /
+   k    'vehiculos'   /T1*T3/;
+
+Alias(i, j);
+
+Parameter    
+   a(k) 'capacidad del vehiculo k'
+        /T1 22.61
+         T2 19.03
+         T3 159/;
+
+Table b(i,p) 'demanda del nodo i de los productos p'
+        p1  p2  p3  p4  p5  p6  p7  p8  p9  p10 p11 p12 p13 p14 p15 p16 p17 p18 p19 p20 p21 p22 p23 p24 p25  
+    i1  0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0      
+    i2  229 0   16  0   0   25  0   0   0   0   0   0   0   0   0   100 0   262 0   7   26  83  0   0   0      
+    i3  0   105 0   0   0   0   0   0   117 0   0   0   0   0   257 0   0   0   717 0   103 0   50  86  0           
+    i4  500 0   0   0   0   300 52  0   0   123 0   0   41  0   0   627 300 451 0   0   0   0   300 0   123
+    i5  267 8   100 0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0      
+    i6  0   0   0   70  218 218 0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0      
+    i7  0   0   0   0   0   0   28  93  5   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0      
+    i8  0   0   0   0   0   0   0   0   4   4   43  43  0   0   0   0   0   0   0   0   0   0   0   0   0      
+    i9  0   2   11  0   0   0   0   0   0   2   0   0   6   4   7   35  15  34  22  5   0   0   0   0   0 ;
+         
+Table c(i,j) 'matriz de costo de transporte'
+        i1    i2    i3    i4    i5    i6    i7    i8    i9
+    i1  9999  458   459   460   588   590   586   414   414
+    i2  448   9999  0.8   2.6   978   980   975   775   776
+    i3  448   1.8   9999  1.9   979   981   976   776   776
+    i4  450   2.7   2     9999  980   982   977   778   778
+    i5  583   983   984   985   9999  6.4   2.8   199   198
+    i6  587   985   985   987   2.8   9999  4.9   202   202
+    i7  585   981   982   984   2.7   5.2   9999  199   198
+    i8  443   786   786   788    203   205   201   9999  0.6
+    i9  443   786   786   788   203    204   201   0.9  9999 ;
+
+Binary Variables
+   x(i,j,k) '1 si el vehículo de transporte k va directamente del nodo i al nodo j, en caso contrario 0'
+   y(i,k)   '1 si el cliente i está totalmente abastecido por el vehículo de transporte k, en caso contrario 0';
+   
+Integer Variable
+    u(i,k)  'Variable adicional para la eliminación de sub_nodos';
+    
+Variables
+    Z      'valor objetivo como suma total de los costes de transporte';
+
+Equations
+    target_function                     'Función objetivo'
+    demand_capa_constr(k)               'Demandas asignadas a un vehículo de transporte corresponden a la capacidad máxima del vehículo'
+    depot_constr(i)                     'Establecer el depósito como punto de partida y de llegada'
+    cust_vehicle_constr(i)              'Al cliente se le asigna exactamente un vehículo de transporte'
+    node_after_constr(i,k)              'cada nodo tiene un nodo después'
+    node_before_const(j,k)              'cada nodo tiene un nodo anterior'
+    subtour_elimination_constr(i,j,k)   'evitar subtours sin depósito'
+    lower_bound_subtour_constr(i,k)     'límite inferior para evitar subtours sin depósito'   
+    upper_bound_subtour_constr(i,k)     'límite superior para evitar subtours sin depósito';
+      
+target_function..                                                                                       Z =e= sum((i, j, k), c(i, j)*x(i, j, k));
+demand_capa_constr(k)..                                                                                 sum((i, p), b(i, p)*y(i, k)) =l= a(k);
+**Donde el operador "ord" devuelve la posición relativa de un miembro en un conjunto y el operador "card" devuelve el número de elementos de un conjunto.
+depot_constr(i)$((ord(i)=1))..                                                                          sum(k, y(i, k)) =e= card(k);
+**Donde el operador "<>" representa "no es igual a" 
+cust_vehicle_constr(i)$((ord(i)<>1))..                                                                  sum(k, y(i, k)) =e= 1;
+**las siguiente 2 restricciones son para cumplir el ciclo hamiltoniano de cada uno de los vehiculos  
+node_after_constr(i,k)..                                                                                sum(j, x(i, j, k)) =e= y(i, k);
+node_before_const(j,k)..                                                                                sum(i, x(i, j, k)) =e= y(j, k);
+**Donde el operador "sameAs(i,j)" busca los conjuntos i,j que tengan un nombre similar. En este caso nodos similares
+subtour_elimination_constr(i,j,k)$(not sameAs(i,j) and (ord(i)<>1) and (ord(j)<>1) and (sum(p, b(i, p) + b(j, p)) <= a(k)))..   u(i, k) - u(j, k) + a(k)*x(i, j, k) =l= a(k) - sum(p, b(j, p));             
+lower_bound_subtour_constr(i,k)..                                                                       sum(p, b(i, p)) =l= u(i, k);
+upper_bound_subtour_constr(i,k)..                                                                       u(i, k) =l= a(k);
+
+Model CVRP /all/;
+
+Solve CVRP using MIP minimizing Z;
+display x.l, y.l, z.l;
